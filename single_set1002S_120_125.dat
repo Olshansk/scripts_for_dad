@@ -1,0 +1,139 @@
+;Units: SI: meter-kilogram-second
+; file_info
+; 1: Filename 2: Number of samples 3: Confining Stress (3)
+; param_info
+; 1: phi 2:c_ 3:Rf_m 4:E50_ref 5:m_ 6:Eur_refm'
+
+new
+def read_file_
+  array In_(1)
+  array param_info(11)
+  fname_ = 'testing_1002S_120_125.txt'
+  can_ = open(fname_,0,1)
+  can_ = read(In_,1)
+  loop jj(1,11)
+    param_info(jj) = parse(In_(1),jj)
+  endloop
+  can_ = close
+  num_samples = param_info(5)
+  jmax_ = num_samples* 2
+end
+read_file_
+
+config axi extra 5
+grid 1 jmax_
+model elastic
+fix y
+hist nstep 100
+
+def setup
+  sample_no = 0
+  max_steps = 0
+  fname_ = param_info(1)
+  fr_ = param_info(6)
+  cohcalc_ = param_info(7)
+  Rf_ = param_info(8)
+  E50_ref_ = param_info(9)
+  m_ = param_info(10)
+  command
+    pr m_
+  endcommand
+    Eur_ref_ = param_info(11)
+    dr_   = 5.0        ;dilation
+    pr_   = 0.26      ;poisson ratio
+    OCR_ = 8.        ;not to be modified
+    Knc_ = 0.7        ;not to be modified
+    pref_ = 100.0      ;reference pressure (keep it 100 kPa)
+    ;check Eur consistency
+    EurMult_ = Eur_ref_/E50_ref_
+    if EurMult_ < 2.5 then
+      Eur_ref_  = 3.0*E50_ref_
+    end_if
+    if EurMult_ > 10 then
+      Eur_ref_  = 10.0*E50_ref_
+    end_if
+    n_ = num_samples
+    loop jj(1,num_samples)
+      caseof jj
+        case 1
+          a_ = 'A_'
+        case 2
+          a_ = 'B_'
+        case 3
+          a_ = 'C_'
+      endcase
+      fnamet_ = 'SA_' + a_ + fname_ + '.dat'
+      sample_no = sample_no + 1
+      _ntable = sample_no  ;table number to store the lab data
+      jno_ = 2*sample_no - 1 ; Sample location
+      jnull_ = jno_ + 1 ; Zone to make null
+      p0_ = -param_info(1+jj)*pref_
+      pini_ = -p0_
+      command
+        table _ntable read @fnamet_
+        model null j = jnull_
+        model p-hardening j = jno_
+        prop E50_ref=E50_ref_ Eur_ref=Eur_ref_ p_ref=pref_ m=m_ poisson=pr_ Rf=Rf_ j=jno_
+        prop friction=fr_ dilation=dr_ cohesion=cohcalc_ density = 1 tension=0e10 j=jno_
+        prop OCR=OCR_ Knc = Knc_ j=jno_
+        prop sig1=p0_ sig2=p0_ sig3=p0_ j=jno_
+        apply sxx = p0_ i=2 j=jno_,jnull_
+        ini sxx p0_ syy p0_ szz p0_ j=jno_
+        his ex_3 i=1 j=jno_
+        his ex_4 i=1 j=jno_
+        his ydis i=1 j=jnull_
+      endcommand
+      max_steps = max(max_steps,table_size(_ntable))
+      ex_1(1,jno_)=_ntable
+      ex_2(1,jno_)=fnamet_
+    endloop
+end
+setup
+
+def LoadUnload
+  load_step = 50
+  loop kk(2,max_steps)
+    loop ii(1,num_samples)
+      jno_ = 2*ii - 1
+      jnull_ = jno_ + 1
+      if kk < table_size(ii)
+        recload_ = ytable(ii,kk-1)
+        rel_disp = xtable(ii,kk) - xtable(ii,kk-1)
+        vel1_ = rel_disp/load_step
+      else
+        recload_ = ytable(ii,table_size(ii))
+        vel1_ = 0.
+      endif
+      yvel(1,jnull_) = -vel1_
+      yvel(2,jnull_) = -vel1_
+      ex_3(1,jno_) = sxx(1,jno_) - syy(1,jno_)
+      ex_4(1,jno_) = recload_
+    endloop
+    command
+      step load_step
+    endcommand
+  endloop
+end
+hist 999 unbal
+LoadUnload
+save single_set.sav
+
+;*** plot commands ***
+def pl_names
+  fnamep1_ = 'plotA_' + fname_ + '.png'
+  fnamep2_ = 'plotB_' + fname_ + '.png'
+  fnamep3_ = 'plotC_' + fname_ + '.png'
+end
+pl_names
+  
+set plot bmp color size 2000,1500
+window 0. 1200. 1100.0 2000.0
+;plot name: A
+set output @fnamep1_
+plot pen history 1 line 2 line vs -3
+;plot name: B
+set output @fnamep2_
+plot pen history 4 line 5 line vs -6
+;plot name: C
+set output @fnamep3_
+plot pen history 7 line 8 line vs -9
