@@ -44,7 +44,7 @@ for txt_file in glob.glob("*.txt"):
         for line in f.readlines():
             if any(keyword in line for keyword in dat_keywords):
                 r = get_num_from_string(line)
-                if r: row.append(r)
+                if r is not None: row.append(r)
     data.append(row)
 
 df = pd.DataFrame(data, columns=columns)
