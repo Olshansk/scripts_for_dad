@@ -22,21 +22,22 @@ columns = [
     "OCR",
     "Knc"
     ]
-index = []
-data = []
 
 dat_keywords = ['dr_', 'pr_', 'OCR_', 'Knc_']
 
 def get_num_from_string(s):
     result = re.findall(r'[\d]*[.][\d]*', s)
     if len(result) == 1:
-        return result[0]
+        return float(result[0])
     return None
 
+data = []
 for txt_file in glob.glob("*.txt"):
     row = []
     with open(txt_file, 'r') as f:
-        row.extend(f.read().strip().split(','))
+        line = f.read().strip().split(',')
+        row.append(line[0])
+        row.extend(list(map(lambda x: float(x), line[1:])))
 
     dat_file = txt_file.replace('testing_', 'single_set').replace('.txt', '.dat')
     with open(dat_file, 'r') as f:
